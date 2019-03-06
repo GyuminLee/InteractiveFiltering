@@ -6,6 +6,7 @@ import org.processmining.contexts.uitopia.annotations.UITopiaVariant;
 import org.processmining.framework.plugin.PluginContext;
 import org.processmining.framework.plugin.annotations.Plugin;
 import org.processmining.framework.plugin.annotations.PluginVariant;
+import org.processmining.interactivefiltering.IFConstant;
 import org.processmining.interactivefiltering.IFModel;
 
 @Plugin(name = "Interactive Filtering (Direct Follow Relation Only)",
@@ -21,6 +22,6 @@ public class IFPlugin {
 		System.out.println("create Interactive View Func Start");
 		context.getProgress().setIndeterminate(true);
 
-		return new IFModel(context, log);
+		return new IFModel(context, log, IFConstant.DFR_INT);
 	}
 }

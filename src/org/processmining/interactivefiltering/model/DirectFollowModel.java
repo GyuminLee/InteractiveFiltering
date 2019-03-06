@@ -67,8 +67,6 @@ public class DirectFollowModel {
 	//ColumnNames
 	ArrayList<String> colNames;
 	
-	
-	
 	public DirectFollowModel(PluginContext context, XLog inputLog) {
 		this.context = context;
 		this.inputLog = inputLog;
@@ -111,11 +109,14 @@ public class DirectFollowModel {
 		//Labeling
 		labelingList = new ArrayList<String>();
 		
+		
+		ArrayList<XEvent> allEventList;
 		for(XTrace trace : inputLog) {
+			allEventList = new ArrayList<XEvent>();
 			String prevTime = "";
 			String nextTime = "";
 			for(XEvent event : trace) {
-				
+
 				//Store event 
 				eventSet.add(getEventName(event));
 				
@@ -165,93 +166,39 @@ public class DirectFollowModel {
 						attrValueCountMap.put(attr + ">>" + event.getAttributes().get(attr).toString(), 1);
 					}
 				}
+				//Build a eventList
+				allEventList.add(event);
+			}
 			
-				//Insert Dummy start , end event
-				String fromString = "START EVENT (Dummy)";
-				String toString = "END EVENT (Dummy)";
-				
-				if(trace.indexOf(event) == 0) {
-					//In case, first event
-					toString = getEventName(event);
+			for(int i = 0; i < allEventList.size(); i++) {
+				if(i == 0) { // first idx , Adding dummy Start event
+					String fromString = "START EVENT (Dummy)";
+					String toString = getEventName(allEventList.get(i));
 					
-				} else if(trace.indexOf(event) == trace.size() - 1) {
-					//In case, last event
-					fromString = getEventName(event);
+					addInformation(fromString, toString, i, allEventList);
+					
+				} else if (i == allEventList.size() - 1) { //Last idx, Adding dummy End event
+					
+					String fromString = getEventName(allEventList.get(i - 1));
+					String toString = getEventName(allEventList.get(i));
+					addInformation(fromString, toString, i, allEventList);
+					
+					fromString = getEventName(allEventList.get(i));
+					toString = "END EVENT (Dummy)";
+					
+					addInformation(fromString, toString, i, allEventList);
+					
+					
 				} else {
-					//Others..
-					fromString = getEventName(trace.get(trace.indexOf(event) - 1));
-					toString = getEventName(event);
-				}
-				
-				//Adding relation to "relationList" 
-				relationList.add(fromString + "->" + toString);
-				
-				//Adding Map 
-				if(directFollowMap.containsKey(fromString + "->" + toString)) {
-					directFollowMap.put(fromString + "->" + toString, directFollowMap.get(fromString + "->" + toString) + 1);
-				} else {
-					directFollowMap.put(fromString + "->" + toString,  1);
-				}
-				
-				if(inputActMap.containsKey(fromString)) {
-					inputActMap.put(fromString, inputActMap.get(fromString) + 1);
-				} else {
-					inputActMap.put(fromString, 1);
-				}
-				
-				//Building waiting time map
-				if(trace.indexOf(event) == 0) {
-					prevTime = event.getAttributes().get("time:timestamp").toString();
-				} else {
-					prevTime = nextTime;
-				}
-				
-				nextTime = event.getAttributes().get("time:timestamp").toString();
-				
-				OffsetDateTime nextODT = OffsetDateTime.parse(nextTime);
-				OffsetDateTime prevODT = OffsetDateTime.parse(prevTime);
-				
-				double diffTime = Duration.between(prevODT, nextODT).getSeconds();
-				
-				if(waitingTimeMap.containsKey(getEventName(event))) {
-					List<Double> waitingTimeList = waitingTimeMap.get(getEventName(event));
-					waitingTimeList.add(diffTime);
-					waitingTimeMap.put(getEventName(event), waitingTimeList);
-				} else {
-					List<Double> waitingTimeList = new ArrayList<Double>();
-					waitingTimeList.add(diffTime);
-					waitingTimeMap.put(getEventName(event), waitingTimeList);
-				}
-				
-				//Adding XEvent data to eventData Map and isSelected Data as well
-				if(eventDataMap.containsKey(fromString + "->" + toString)) { //Update Value
-					//XEvent
-					ArrayList<XEvent> eventList = eventDataMap.get(fromString + "->" + toString);
-					eventList.add(event);
-					eventDataMap.put(fromString + "->" + toString, eventList);
-					//isSelected
-					ArrayList<Boolean> isSelectedList = isSelectedDataMap.get(fromString + "->" + toString);
-					isSelectedList.add(false);
-					isSelectedDataMap.put(fromString + "->" + toString, isSelectedList);
-				} else { // Initial Value
-					//XEvent
-					ArrayList<XEvent> eventList = new ArrayList<XEvent>();
-					eventList.add(event);
-					eventDataMap.put(fromString + "->" + toString, eventList);
-					//isSelected
-					ArrayList<Boolean> isSelectedList = new ArrayList<Boolean>();
-					isSelectedList.add(false);
-					isSelectedDataMap.put(fromString + "->" + toString, isSelectedList);
-				}
-				
-				//Adding absFreq
-				if(absFreq.containsKey(fromString + "->" + toString)) {
-					absFreq.put(fromString + "->" + toString, absFreq.get(fromString + "->" + toString) + 1);
-				} else {
-					absFreq.put(fromString + "->" + toString, 1);
+					String fromString = getEventName(allEventList.get(i - 1));
+					String toString = getEventName(allEventList.get(i));
+					
+					addInformation(fromString, toString, i, allEventList);
 				}
 			}
+			
 		}
+		
 		absFreq = IFUtil.sortByValue(absFreq);
 		
 		//Find IQR Values
@@ -464,6 +411,81 @@ public class DirectFollowModel {
 		this.lowerIQRBoundMap = lowerIQRBoundMap;
 	}
 
+	public void addInformation(String fromString, String toString, int idx, ArrayList<XEvent> allEventList) {
+		
+		XEvent event = allEventList.get(idx);
+		String prevTime;
+		String nextTime;
+		
+		//Adding relation to "relationList" 
+		relationList.add(fromString + "->" + toString);
+		
+		//Adding Map 
+		if(directFollowMap.containsKey(fromString + "->" + toString)) {
+			directFollowMap.put(fromString + "->" + toString, directFollowMap.get(fromString + "->" + toString) + 1);
+		} else {
+			directFollowMap.put(fromString + "->" + toString,  1);
+		}
+		
+		if(inputActMap.containsKey(fromString)) {
+			inputActMap.put(fromString, inputActMap.get(fromString) + 1);
+		} else {
+			inputActMap.put(fromString, 1);
+		}
+		
+		//Building waiting time map
+		if(idx == 0) {
+			prevTime = event.getAttributes().get("time:timestamp").toString();
+		} else {
+			prevTime = allEventList.get(idx-1).getAttributes().get("time:timestamp").toString();
+		}
+		
+		nextTime = event.getAttributes().get("time:timestamp").toString();
+		
+		OffsetDateTime nextODT = OffsetDateTime.parse(nextTime);
+		OffsetDateTime prevODT = OffsetDateTime.parse(prevTime);
+		
+		double diffTime = Duration.between(prevODT, nextODT).getSeconds();
+		
+		if(waitingTimeMap.containsKey(getEventName(event))) {
+			List<Double> waitingTimeList = waitingTimeMap.get(getEventName(event));
+			waitingTimeList.add(diffTime);
+			waitingTimeMap.put(getEventName(event), waitingTimeList);
+		} else {
+			List<Double> waitingTimeList = new ArrayList<Double>();
+			waitingTimeList.add(diffTime);
+			waitingTimeMap.put(getEventName(event), waitingTimeList);
+		}
+		
+		//Adding XEvent data to eventData Map and isSelected Data as well
+		if(eventDataMap.containsKey(fromString + "->" + toString)) { //Update Value
+			//XEvent
+			ArrayList<XEvent> eventList = eventDataMap.get(fromString + "->" + toString);
+			eventList.add(event);
+			eventDataMap.put(fromString + "->" + toString, eventList);
+			//isSelected
+			ArrayList<Boolean> isSelectedList = isSelectedDataMap.get(fromString + "->" + toString);
+			isSelectedList.add(false);
+			isSelectedDataMap.put(fromString + "->" + toString, isSelectedList);
+		} else { // Initial Value
+			//XEvent
+			ArrayList<XEvent> eventList = new ArrayList<XEvent>();
+			eventList.add(event);
+			eventDataMap.put(fromString + "->" + toString, eventList);
+			//isSelected
+			ArrayList<Boolean> isSelectedList = new ArrayList<Boolean>();
+			isSelectedList.add(false);
+			isSelectedDataMap.put(fromString + "->" + toString, isSelectedList);
+		}
+		
+		//Adding absFreq
+		if(absFreq.containsKey(fromString + "->" + toString)) {
+			absFreq.put(fromString + "->" + toString, absFreq.get(fromString + "->" + toString) + 1);
+		} else {
+			absFreq.put(fromString + "->" + toString, 1);
+		}
+	}
+	
 	public static List<Double> getOutliers(List<Double> input) {
 		List<Double> output = new ArrayList<Double>();
 		List<Double> data1 = new ArrayList<Double>();

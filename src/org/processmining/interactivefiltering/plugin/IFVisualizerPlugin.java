@@ -33,10 +33,12 @@ import org.processmining.contexts.uitopia.annotations.Visualizer;
 import org.processmining.framework.plugin.PluginContext;
 import org.processmining.framework.plugin.annotations.Plugin;
 import org.processmining.framework.plugin.annotations.PluginVariant;
+import org.processmining.interactivefiltering.IFConstant;
 import org.processmining.interactivefiltering.IFModel;
 import org.processmining.interactivefiltering.RelativeLayout;
-import org.processmining.interactivefiltering.listener.DataTypeSelectionListener;
+import org.processmining.interactivefiltering.model.ConditionalProbabilityModel;
 import org.processmining.interactivefiltering.model.DirectFollowModel;
+import org.processmining.interactivefiltering.model.EventualFollowModel;
 import org.processmining.interactivefiltering.table.IFInfoTableModel;
 import org.processmining.interactivefiltering.table.IFListTableModel;
 import org.processmining.interactivefiltering.table.InfoTableCellRenderer;
@@ -90,7 +92,7 @@ class MainView extends JPanel {
 		
 		this.add(leftPanel, new Float(70));
 		this.add(rightPanel, new Float(30));
-		leftPanel.listPanel.createListTable();
+		leftPanel.listPanel.createListTable(IFConstant.DFR_INT);
 		leftPanel.infoPanel.createInfoTable(0, model.getDfrModel().getExceptionList());//Initially showing the first row information.
 		
 	}
@@ -108,14 +110,19 @@ class RightPanel extends JPanel {
 	
 	// Attributes Setting
 	JCheckBox[] attrCheckBox;
+	
 //	AttributeChangeListener attrChangeListener;
 	
 	JComboBox<String>[] dataTypeSelection;
+	JComboBox<String> patternSelection;
+	JLabel conditionLengthLabel;
+	JComboBox<Integer> conditionLengthSelection;
 	DataTypeSelectionListener dataTypeSelectionListener;
+	PatternSelectionListener patternSelectionListener;
 	
 	//Slider
 	NiceIntegerSlider thresholdCategoricalSlider;
-
+	
 	
 	// Button (Export, refresh)
 	JButton exportButton;
@@ -123,7 +130,7 @@ class RightPanel extends JPanel {
 	JButton refreshButton;
 	RefreshButtonListener refreshListener;
 	JButton addLabelButton;
-	AddLabelButtonListener addLabelListener;
+//	AddLabelButtonListener addLabelListener;
 	
 	
 	public RightPanel(PluginContext context, IFModel model, LeftPanel leftPanel) {
@@ -134,6 +141,23 @@ class RightPanel extends JPanel {
 		RelativeLayout rl = new RelativeLayout(RelativeLayout.Y_AXIS);
 		rl.setFill(true);
 		this.setLayout(rl);
+
+		
+		conditionLengthLabel = new JLabel("The length of condition");
+		conditionLengthSelection = new JComboBox<Integer>();
+		for(int i = 1; i < 5; i++) { // TODO Need to change the length 
+			conditionLengthSelection.addItem(i);
+		}
+		conditionLengthLabel.setVisible(false);
+		conditionLengthSelection.setVisible(false);
+		conditionLengthSelection.setSelectedItem(2);
+		
+		patternSelection = new JComboBox<String>();
+		patternSelection.addItem(IFConstant.DFR_STRING);
+		patternSelection.addItem(IFConstant.CPP_STRING);
+		patternSelection.addItem(IFConstant.EFR_STRING);
+		patternSelectionListener = new PatternSelectionListener(context, model, leftPanel, patternSelection);
+		patternSelection.addActionListener(patternSelectionListener);
 		
 		ArrayList<String> list = new ArrayList<String>(model.getDfrModel().getAttrSet()); 
 		attrCheckBox = new JCheckBox[list.size()];
@@ -173,14 +197,14 @@ class RightPanel extends JPanel {
 		
 		this.thresholdCategoricalSlider = SlickerFactory.instance().createNiceIntegerSlider("Set Categorical Threshold", 0, 100, 25, Orientation.HORIZONTAL);
 	
-		this.addLabelButton = new JButton("Add Label");
-		addLabelListener = new AddLabelButtonListener(context, model);
-		this.addLabelButton.addActionListener(addLabelListener);
+//		this.addLabelButton = new JButton("Add Label");
+//		addLabelListener = new AddLabelButtonListener(context, model);
+//		this.addLabelButton.addActionListener(addLabelListener);
 		this.exportButton = new JButton("Export");
 		exportListener = new ExportButtonListener(context, model);
 		this.exportButton.addActionListener(exportListener);
 		this.refreshButton = new JButton("Refresh");
-		refreshListener = new RefreshButtonListener(context, model.getDfrModel(), attrCheckBox, dataTypeSelection, thresholdCategoricalSlider, leftPanel );
+		refreshListener = new RefreshButtonListener(context, model, attrCheckBox, dataTypeSelection, thresholdCategoricalSlider, conditionLengthSelection,  patternSelection, conditionLengthLabel, leftPanel);
 		this.refreshButton.addActionListener(refreshListener);
 		
 		/**
@@ -190,11 +214,22 @@ class RightPanel extends JPanel {
 		//Attribute List
 		JLabel attrLabel = new JLabel("Attribute List");
 		this.add(attrLabel);
-		this.add(scrollPanel, new Float(50));
+		this.add(scrollPanel, new Float(30));
+
+		JLabel patternLabel = new JLabel("Select Pattern");
+		this.add(patternLabel);
+		this.add(patternSelection);
+		
+		this.add(conditionLengthLabel);
+		this.add(conditionLengthSelection);
+		
+		JLabel thresholdLabel = new JLabel("Thresholds");
+		this.add(thresholdLabel);
+		this.add(thresholdCategoricalSlider);
 		
 		//Button (Export, Refresh)
 		JLabel buttonLabel = new JLabel("Buttons");
-		this.add(thresholdCategoricalSlider);
+		this.add(buttonLabel);
 		this.add(exportButton);
 		this.add(refreshButton);
 		
@@ -274,11 +309,22 @@ class ListPanel extends JPanel {
 		this.infoPanel = infoPanel;
 	}
 	
-	public void createListTable() {
+	public void createListTable(int selectedPattern) {
+		this.removeAll();
+		this.updateUI();
 		System.out.println("Create List Table");
 		IFListTableModel tableModel;
-		tableModel = new IFListTableModel(context, model.getDfrModel());
+
+		model.setSelectedPattern(selectedPattern);
+		if(selectedPattern == IFConstant.CPP_INT) {
+			model.setCppModel(new ConditionalProbabilityModel(context, model.getInputLog(), model.getLengthCondition()));
+		} else if (selectedPattern == IFConstant.EFR_INT) {
+			model.setEfrModel(new EventualFollowModel(context, model.getInputLog()));
+		} else {
+			model.setDfrModel(new DirectFollowModel(context, model.getInputLog()));
+		}
 		
+		tableModel = new IFListTableModel(context, model);		
 		JTable jTable = new JTable(tableModel);
 		table = jTable;
 
@@ -286,18 +332,38 @@ class ListPanel extends JPanel {
 			public void keyTyped(KeyEvent e) {}
 			public void keyReleased(KeyEvent e) {
 				int row = table.getSelectedRow();
+				int selectedPattern = model.getSelectedPattern();
 				
-				infoPanel.createInfoTable(row, model.getDfrModel().getExceptionList());				
+				if(selectedPattern == IFConstant.CPP_INT) {
+					infoPanel.createInfoTable(row, model.getCppModel().getExceptionList());
+				} else if (selectedPattern == IFConstant.EFR_INT) {
+					infoPanel.createInfoTable(row, model.getEfrModel().getExceptionList());
+				} else {
+					infoPanel.createInfoTable(row, model.getDfrModel().getExceptionList());				
+				}
+				
 			}
 			public void keyPressed(KeyEvent e) {}
 		});
 		jTable.addMouseListener(new MouseListener() {
 			public void mouseReleased(MouseEvent e) {
 				int row = table.getSelectedRow();
-				infoPanel.createInfoTable(row, model.getDfrModel().getExceptionList());
+				int selectedPattern = model.getSelectedPattern();
 				
-				String keyStr = (String) model.getDfrModel().getAbsFreq().keySet().toArray()[row];
-				System.out.println("Key String in ListTable : " + keyStr);
+				if(selectedPattern == IFConstant.CPP_INT) {
+					infoPanel.createInfoTable(row, model.getCppModel().getExceptionList());
+					String keyStr = (String) model.getCppModel().getAbsFreq().keySet().toArray()[row];
+					System.out.println("Key String in ListTable : " + keyStr);
+				} else if (selectedPattern == IFConstant.EFR_INT) {
+					infoPanel.createInfoTable(row, model.getEfrModel().getExceptionList());
+					String keyStr = (String) model.getEfrModel().getAbsFreq().keySet().toArray()[row];
+					System.out.println("Key String in ListTable : " + keyStr);
+				} else {
+					infoPanel.createInfoTable(row, model.getDfrModel().getExceptionList());
+					String keyStr = (String) model.getDfrModel().getAbsFreq().keySet().toArray()[row];
+					System.out.println("Key String in ListTable : " + keyStr);
+				}
+				
 
 			}
 			public void mousePressed(MouseEvent e) {}
@@ -335,49 +401,124 @@ class InfoPanel extends JPanel {
 		this.removeAll();
 		this.updateUI();
 		IFInfoTableModel tableModel;
-		tableModel = new IFInfoTableModel(context, model.getDfrModel(), selectedRow);
+		tableModel = new IFInfoTableModel(context, model, selectedRow);
 		JTable jTable = new JTable(tableModel);
 		table = jTable;
-		exceptionList = model.getDfrModel().getExceptionList();
+		
+		int selectedPattern = model.getSelectedPattern();
+		if(selectedPattern == IFConstant.CPP_INT) {
+			exceptionList = model.getCppModel().getExceptionList();
+		} else if(selectedPattern == IFConstant.EFR_INT) {
+			exceptionList = model.getEfrModel().getExceptionList();
+		} else { //DFR_INT
+			exceptionList = model.getDfrModel().getExceptionList();
+		}
 
 		Collections.sort(exceptionList, Collections.reverseOrder());
 
 		jTable.setDefaultRenderer(Object.class, new InfoTableCellRenderer());
 		
+		
 		jTable.addMouseListener(new MouseListener() {
 			public void mouseReleased(MouseEvent e) {
 				int row = table.getSelectedRow();
 				int col = table.getSelectedColumn();
+				int selectedPattern = model.getSelectedPattern();
 				if(col == 0) {
-					String keyStr = (String)model.getDfrModel().getAbsFreq().keySet().toArray()[selectedRow];
-					boolean isSelected = model.getDfrModel().getIsSelectedDataMap().get(keyStr).get(row);
 					
-					System.out.println("Key String in infoTable : " + keyStr);
-					
-					if(isSelected) { //Update the value
-						ArrayList<Boolean> list = model.getDfrModel().getIsSelectedDataMap().get(keyStr);
-						list.remove(row);
-						list.add(row, false);
-						model.getDfrModel().getIsSelectedDataMap().put(keyStr, list);
+					if(selectedPattern == IFConstant.CPP_INT) {
+						String keyStr = (String)model.getCppModel().getAbsFreq().keySet().toArray()[selectedRow];
+						boolean isSelected = model.getCppModel().getIsSelectedDataMap().get(keyStr).get(row);
 						
-						//Update filtering list
-						ArrayList<XID> filteringList = model.getDfrModel().getFilteringList();
-						XEvent event = model.getDfrModel().getEventDataMap().get(keyStr).get(row);
-						filteringList.remove((event.getID()));
-						model.getDfrModel().setFilteringList(filteringList);
-						System.out.println("Filtering List : " + filteringList);
+						System.out.println("Key String in infoTable : " + keyStr);
 						
-					} else {
-						ArrayList<Boolean> list = model.getDfrModel().getIsSelectedDataMap().get(keyStr);
-						list.remove(row);
-						list.add(row, true);
-						model.getDfrModel().getIsSelectedDataMap().put(keyStr, list);
-						//Update filtering List
-						ArrayList<XID> filteringList = model.getDfrModel().getFilteringList();
-						XEvent event = model.getDfrModel().getEventDataMap().get(keyStr).get(row);
-						filteringList.add((event.getID()));
-						model.getDfrModel().setFilteringList(filteringList);
-						System.out.println("Filtering List : " + filteringList);
+						if(isSelected) { //Update the value
+							ArrayList<Boolean> list = model.getCppModel().getIsSelectedDataMap().get(keyStr);
+							list.remove(row);
+							list.add(row, false);
+							model.getCppModel().getIsSelectedDataMap().put(keyStr, list);
+							
+							//Update filtering list
+							ArrayList<XID> filteringList = model.getCppModel().getFilteringList();
+							XEvent event = model.getCppModel().getEventDataMap().get(keyStr).get(row);
+							filteringList.remove((event.getID()));
+							model.getCppModel().setFilteringList(filteringList);
+							System.out.println("Filtering List : " + filteringList);
+							
+						} else {
+							ArrayList<Boolean> list = model.getCppModel().getIsSelectedDataMap().get(keyStr);
+							list.remove(row);
+							list.add(row, true);
+							model.getCppModel().getIsSelectedDataMap().put(keyStr, list);
+							//Update filtering List
+							ArrayList<XID> filteringList = model.getCppModel().getFilteringList();
+							XEvent event = model.getCppModel().getEventDataMap().get(keyStr).get(row);
+							filteringList.add((event.getID()));
+							model.getCppModel().setFilteringList(filteringList);
+							System.out.println("Filtering List : " + filteringList);
+						}
+					} else if(selectedPattern == IFConstant.EFR_INT) {
+						String keyStr = (String)model.getEfrModel().getAbsFreq().keySet().toArray()[selectedRow];
+						boolean isSelected = model.getEfrModel().getIsSelectedDataMap().get(keyStr).get(row);
+						
+						System.out.println("Key String in infoTable : " + keyStr);
+						
+						if(isSelected) { //Update the value
+							ArrayList<Boolean> list = model.getEfrModel().getIsSelectedDataMap().get(keyStr);
+							list.remove(row);
+							list.add(row, false);
+							model.getEfrModel().getIsSelectedDataMap().put(keyStr, list);
+							
+							//Update filtering list
+							ArrayList<XID> filteringList = model.getEfrModel().getFilteringList();
+							XEvent event = model.getEfrModel().getEventDataMap().get(keyStr).get(row);
+							filteringList.remove((event.getID()));
+							model.getEfrModel().setFilteringList(filteringList);
+							System.out.println("Filtering List : " + filteringList);
+							
+						} else {
+							ArrayList<Boolean> list = model.getEfrModel().getIsSelectedDataMap().get(keyStr);
+							list.remove(row);
+							list.add(row, true);
+							model.getEfrModel().getIsSelectedDataMap().put(keyStr, list);
+							//Update filtering List
+							ArrayList<XID> filteringList = model.getEfrModel().getFilteringList();
+							XEvent event = model.getEfrModel().getEventDataMap().get(keyStr).get(row);
+							filteringList.add((event.getID()));
+							model.getEfrModel().setFilteringList(filteringList);
+							System.out.println("Filtering List : " + filteringList);
+						}
+					} else { //DFR_INT
+						String keyStr = (String)model.getDfrModel().getAbsFreq().keySet().toArray()[selectedRow];
+						boolean isSelected = model.getDfrModel().getIsSelectedDataMap().get(keyStr).get(row);
+						
+						System.out.println("Key String in infoTable : " + keyStr);
+						
+						if(isSelected) { //Update the value
+							ArrayList<Boolean> list = model.getDfrModel().getIsSelectedDataMap().get(keyStr);
+							list.remove(row);
+							list.add(row, false);
+							model.getDfrModel().getIsSelectedDataMap().put(keyStr, list);
+							
+							//Update filtering list
+							ArrayList<XID> filteringList = model.getDfrModel().getFilteringList();
+							XEvent event = model.getDfrModel().getEventDataMap().get(keyStr).get(row);
+							filteringList.remove((event.getID()));
+							model.getDfrModel().setFilteringList(filteringList);
+							System.out.println("Filtering List : " + filteringList);
+							
+						} else {
+							ArrayList<Boolean> list = model.getDfrModel().getIsSelectedDataMap().get(keyStr);
+							list.remove(row);
+							list.add(row, true);
+							model.getDfrModel().getIsSelectedDataMap().put(keyStr, list);
+							//Update filtering List
+							ArrayList<XID> filteringList = model.getDfrModel().getFilteringList();
+							XEvent event = model.getDfrModel().getEventDataMap().get(keyStr).get(row);
+							filteringList.add((event.getID()));
+							model.getDfrModel().setFilteringList(filteringList);
+							System.out.println("Filtering List : " + filteringList);
+						}
 					}
 				}	
 			}
@@ -392,11 +533,71 @@ class InfoPanel extends JPanel {
 		this.add(scrollPanel, new Float(30));
 		
 		leftPanel.selectCheckBox();
+	}
+}
+
+class PatternSelectionListener implements ActionListener {
+	PluginContext context;
+	IFModel model;
+	JComboBox<String> patternSelection;
+	LeftPanel leftPanel;
+	
+	public PatternSelectionListener(PluginContext context, IFModel model, LeftPanel leftPanel, JComboBox<String> patternSelection) {
+		this.context = context;
+		this.model = model;
+		this.patternSelection = patternSelection;
+		this.leftPanel = leftPanel;
+	}
+	
+	public void actionPerformed(ActionEvent e) {
+		String selectedItem = patternSelection.getSelectedItem().toString();
+		int selectedPattern = IFConstant.DFR_INT;
 		
+		if(selectedItem.equals(IFConstant.CPP_STRING)) {
+			selectedPattern = IFConstant.CPP_INT;
+			System.out.println("CPP Selected");
+		} else if(selectedItem.equals(IFConstant.EFR_STRING)) {
+			selectedPattern = IFConstant.EFR_INT;
+			System.out.println("EFR Selected");
+		}
+		System.out.println("Param : " + selectedItem + " / " + selectedPattern);
+//		leftPanel.listPanel.createListTable(selectedPattern);		
 		
 	}
 }
 
+class DataTypeSelectionListener implements ActionListener {
+
+	PluginContext context;
+	IFModel model;
+	JComboBox<String>[] dataTypeSelection;
+	int index;
+
+	public DataTypeSelectionListener(PluginContext context, IFModel model, JComboBox<String>[] dataTypeSelection, int index) {
+		this.context = context;
+		this.model = model;
+		this.dataTypeSelection = dataTypeSelection;
+		this.index = index;
+	}
+
+
+	public void actionPerformed(ActionEvent e) {
+		String selectedItem = dataTypeSelection[index].getSelectedItem().toString();
+		// TODO Auto-generated method stub
+//		if(selectedItem.equals(IFConstant.CPP_STRING)) {
+//			model.setSelectedPattern(IFConstant.CPP_INT);	
+//		} else if (selectedItem.equals(IFConstant.EFR_STRING)) {
+//			model.setSelectedPattern(IFConstant.EFR_INT);
+//		} else {
+//			model.setSelectedPattern(IFConstant.DFR_INT);
+//		}
+//		
+		System.out.println("Selected Item : " + selectedItem);
+
+	}
+
+
+}
 
 class SelectionCheckBoxChangeListener implements ActionListener{
 
@@ -431,20 +632,26 @@ class SelectionCheckBoxChangeListener implements ActionListener{
 
 class RefreshButtonListener implements ActionListener {
 	PluginContext context;
-	DirectFollowModel model;
+	IFModel model;
 	JCheckBox[] attrCheckBoxList;
-	JComboBox[] dataTypeSelectionList;
+	JComboBox<String>[] dataTypeSelectionList;
 	NiceIntegerSlider sliderCategorical;
+	JComboBox<String> patternSelection;
+	JComboBox<Integer> conditionLengthSelection;
+	JLabel conditionLengthLabel;
+	
 	LeftPanel leftPanel;
 	
-	public RefreshButtonListener(PluginContext context, DirectFollowModel model, JCheckBox[] attrCheckBoxList, JComboBox<String>[] dataTypeSelectionList, NiceIntegerSlider sliderCategorical, LeftPanel leftPanel) {
+	public RefreshButtonListener(PluginContext context, IFModel model, JCheckBox[] attrCheckBoxList, JComboBox<String>[] dataTypeSelectionList, NiceIntegerSlider sliderCategorical, JComboBox<Integer> conditionLengthSelection, JComboBox<String> patternSelection, JLabel conditionLengthLabel, LeftPanel leftPanel) {
 		this.context = context;
 		this.model = model;
 		this.attrCheckBoxList = attrCheckBoxList;
 		this.leftPanel = leftPanel;
 		this.dataTypeSelectionList = dataTypeSelectionList;
 		this.sliderCategorical = sliderCategorical;
-		
+		this.patternSelection = patternSelection;
+		this.conditionLengthSelection = conditionLengthSelection;
+		this.conditionLengthLabel = conditionLengthLabel;
 	}
 
 	public void actionPerformed(ActionEvent e) {
@@ -456,30 +663,106 @@ class RefreshButtonListener implements ActionListener {
 			}
 		}
 		
-		model.setExceptionList(exceptionList);
-		ArrayList<String> attrList = new ArrayList<String>(model.getAttrSet());
-		Map<String, String> dataTypeMap = new HashMap<String, String>();
-		
-		//Change Data Type (Categorical / Numerical)
-		for(int i = 0; i < dataTypeSelectionList.length; i++) {
-			String selectedItem = dataTypeSelectionList[i].getSelectedItem().toString();
-			String attrName = attrList.get(i);
-			
-			dataTypeMap.put(attrName, selectedItem);
+		int selectedPattern = IFConstant.DFR_INT;
+		if(patternSelection.getSelectedItem().equals(IFConstant.CPP_STRING)) {
+			selectedPattern = IFConstant.CPP_INT;
+			model.setCppModel(new ConditionalProbabilityModel(context, model.getInputLog(), model.getLengthCondition()));
+		} else if(patternSelection.getSelectedItem().equals(IFConstant.EFR_STRING)) {
+			selectedPattern = IFConstant.EFR_INT;
+			model.setEfrModel(new EventualFollowModel(context, model.getInputLog()));
+		} else {
+			selectedPattern = IFConstant.DFR_INT;
 		}
-		model.setDataTypeMap(dataTypeMap);
+		model.setSelectedPattern(selectedPattern);
 		
-		//Change Threshold
-		double threshold = ( sliderCategorical.getValue() * 1.0 ) / 100;
-		model.setThresholdCategorical(threshold);
-		System.out.println("Threshold Changed : " + threshold);
-		//Update View
+		if(selectedPattern == IFConstant.CPP_INT) {
+			model.getCppModel().setExceptionList(exceptionList);
+			ArrayList<String> attrList = new ArrayList<String>(model.getCppModel().getAttrSet());
+			Map<String, String> dataTypeMap = new HashMap<String, String>();
+			
+			//Change Data Type (Categorical / Numerical)
+			for(int i = 0; i < dataTypeSelectionList.length; i++) {
+				String selectedItem = dataTypeSelectionList[i].getSelectedItem().toString();
+				String attrName = attrList.get(i);
+				
+				dataTypeMap.put(attrName, selectedItem);
+			}
+			model.getCppModel().setDataTypeMap(dataTypeMap);
+			
+			//Change Threshold
+			double threshold = ( sliderCategorical.getValue() * 1.0 ) / 100;
+			model.getCppModel().setThresholdCategorical(threshold);
+			System.out.println("Threshold Changed : " + threshold);
+			
+			//Change Condition Length
+			model.setLengthCondition(Integer.parseInt(conditionLengthSelection.getSelectedItem().toString()));
+			
+			//Visibility
+			conditionLengthLabel.setVisible(true);
+			conditionLengthSelection.setVisible(true);
+			
+		} else if(selectedPattern == IFConstant.EFR_INT) {
+			model.getEfrModel().setExceptionList(exceptionList);
+			ArrayList<String> attrList = new ArrayList<String>(model.getEfrModel().getAttrSet());
+			Map<String, String> dataTypeMap = new HashMap<String, String>();
+			
+			//Change Data Type (Categorical / Numerical)
+			for(int i = 0; i < dataTypeSelectionList.length; i++) {
+				String selectedItem = dataTypeSelectionList[i].getSelectedItem().toString();
+				String attrName = attrList.get(i);
+				
+				dataTypeMap.put(attrName, selectedItem);
+			}
+			model.getEfrModel().setDataTypeMap(dataTypeMap);
+			
+			//Change Threshold
+			double threshold = ( sliderCategorical.getValue() * 1.0 ) / 100;
+			model.getEfrModel().setThresholdCategorical(threshold);
+			System.out.println("Threshold Changed : " + threshold);
+			//Visibility
+			conditionLengthLabel.setVisible(false);
+			conditionLengthSelection.setVisible(false);
+		} else { //DFR_INT
+			model.getDfrModel().setExceptionList(exceptionList);
+			ArrayList<String> attrList = new ArrayList<String>(model.getDfrModel().getAttrSet());
+			Map<String, String> dataTypeMap = new HashMap<String, String>();
+			
+			//Change Data Type (Categorical / Numerical)
+			for(int i = 0; i < dataTypeSelectionList.length; i++) {
+				String selectedItem = dataTypeSelectionList[i].getSelectedItem().toString();
+				String attrName = attrList.get(i);
+				
+				dataTypeMap.put(attrName, selectedItem);
+			}
+			model.getDfrModel().setDataTypeMap(dataTypeMap);
+			
+			//Change Threshold
+			double threshold = ( sliderCategorical.getValue() * 1.0 ) / 100;
+			model.getDfrModel().setThresholdCategorical(threshold);
+			System.out.println("Threshold Changed : " + threshold);
+			
+			//Visibility
+			conditionLengthLabel.setVisible(false);
+			conditionLengthSelection.setVisible(false);
+		}		
+		
+		//Update List View
+		leftPanel.listPanel.createListTable(selectedPattern);
+		//Update Info View
 		IFInfoTableModel tableModel = (IFInfoTableModel) leftPanel.infoPanel.table.getModel();
-		leftPanel.infoPanel.createInfoTable(tableModel.getFocusedIndex(), exceptionList);
+		
+		//If changed pattern, showing index0 information
+		if(model.getPrevPattern() == selectedPattern) {
+			leftPanel.infoPanel.createInfoTable(tableModel.getFocusedIndex(), exceptionList);
+		} else {
+			leftPanel.infoPanel.createInfoTable(0, exceptionList);
+		}
+		model.setPrevPattern(selectedPattern);
+		
 	}
 }
 
-
+/*
 class AddLabelButtonListener implements ActionListener {
 	PluginContext context;
 	IFModel model;
@@ -534,6 +817,7 @@ class AddLabelButtonListener implements ActionListener {
 	
 	}
 }
+*/
 
 class ExportButtonListener implements ActionListener {
 	PluginContext context;
@@ -571,6 +855,8 @@ class ExportButtonListener implements ActionListener {
 				}
 			}
 			String[] eventArray = eventList.split(">>");
+			
+			//TODO add other patterns
 			for(int i = 0; i < eventArray.length - 1; i++) {
 				String prevEvent = eventArray[i];
 				String nextEvent = eventArray[i+1];
