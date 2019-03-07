@@ -1,6 +1,7 @@
 package org.processmining.interactivefiltering.model;
 
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -29,7 +30,7 @@ public class EventualFollowModel {
 	Set<String> attrSet;
 	Map<String, Integer> attrValueCountMap;
 	Map<String, Integer> attrCountMap;
-	ArrayList<Integer> exceptionList;
+	ArrayList<String> exceptionStringList;
 
 	//Threshold
 	Double thresholdCategorical = 0.25;
@@ -55,7 +56,7 @@ public class EventualFollowModel {
 	Map<String, Double> lowerIQRBoundMap;
 
 	//Constructor
-	public EventualFollowModel(PluginContext context, XLog inputLog) {
+	public EventualFollowModel(PluginContext context, XLog inputLog, ArrayList<String> exceptionStringList) {
 		this.context = context;
 		this.inputLog = inputLog;
 		this.colNames = new ArrayList<String>();
@@ -70,7 +71,7 @@ public class EventualFollowModel {
 		attrValueCountMap = new HashMap<String, Integer>();
 		attrCountMap = new HashMap<String, Integer>();
 		attrSet = new HashSet<String>();
-		exceptionList = new ArrayList<Integer>();
+		this.exceptionStringList = exceptionStringList;
 
 		//Relation
 		relationList = new ArrayList<String>();
@@ -97,6 +98,12 @@ public class EventualFollowModel {
 		//Labeling
 		//		labelingList = new ArrayList<String>();
 
+		
+
+		System.out.println("EFR Calculation start");
+		Date startDate = new Date();
+		long startTime =  startDate.getTime();
+		
 		ArrayList<XEvent> allEventList;
 		for(XTrace trace : inputLog) {
 			allEventList = new ArrayList<XEvent>();
@@ -108,50 +115,52 @@ public class EventualFollowModel {
 				//Collecting attributes
 				attrMap = event.getAttributes();
 				for(String attr : attrMap.keySet()) {
-					attrSet.add(attr);
-					String data = event.getAttributes().get(attr).toString();
+					//if attr is not in the exceptionList
+					if(!exceptionStringList.contains(attr)) {
+						attrSet.add(attr);
+						String data = event.getAttributes().get(attr).toString();
 
-					if(IFUtil.isDoubleString(data)) {
-						data = data.replaceAll(",", ".");
-						if(numericalListMap.containsKey(attr)) {
-							ArrayList<Double> list = numericalListMap.get(attr);
-							list.add(Double.parseDouble(data));
-							numericalListMap.put(attr, list);
-						} else {
-							ArrayList<Double> list = new ArrayList<Double>();
-							list.add(Double.parseDouble(data));
-							numericalListMap.put(attr, list);
-						}
-					}
-
-					if(!(dataTypeMap.containsKey(attr))) {
 						if(IFUtil.isDoubleString(data)) {
-							dataTypeMap.put(attr, "Numerical");
-						} else if(attr.equals("concept:name")
-								||
-								attr.equals("time:timestamp")
-								||
-								attr.equals("lifecycle:transition")
-								) {
-							dataTypeMap.put(attr, "None");
-						} else {
-							dataTypeMap.put(attr, "Categorical");
+							data = data.replaceAll(",", ".");
+							if(numericalListMap.containsKey(attr)) {
+								ArrayList<Double> list = numericalListMap.get(attr);
+								list.add(Double.parseDouble(data));
+								numericalListMap.put(attr, list);
+							} else {
+								ArrayList<Double> list = new ArrayList<Double>();
+								list.add(Double.parseDouble(data));
+								numericalListMap.put(attr, list);
+							}
 						}
-					}
 
-					if(attrCountMap.containsKey(attr)) {
-						attrCountMap.put(attr, attrCountMap.get(attr) + 1);
-					} else {
-						attrCountMap.put(attr, 1);
-					}
+						if(!(dataTypeMap.containsKey(attr))) {
+							if(IFUtil.isDoubleString(data)) {
+								dataTypeMap.put(attr, "Numerical");
+							} else if(attr.equals("concept:name")
+									||
+									attr.equals("time:timestamp")
+									||
+									attr.equals("lifecycle:transition")
+									) {
+								dataTypeMap.put(attr, "None");
+							} else {
+								dataTypeMap.put(attr, "Categorical");
+							}
+						}
 
-					if(attrValueCountMap.containsKey(attr + ">>" + event.getAttributes().get(attr).toString())) {
-						attrValueCountMap.put(attr + ">>" + event.getAttributes().get(attr).toString(), attrValueCountMap.get(attr + ">>" + event.getAttributes().get(attr).toString()) + 1);	
-					} else {
-						attrValueCountMap.put(attr + ">>" + event.getAttributes().get(attr).toString(), 1);
+						if(attrCountMap.containsKey(attr)) {
+							attrCountMap.put(attr, attrCountMap.get(attr) + 1);
+						} else {
+							attrCountMap.put(attr, 1);
+						}
+
+						if(attrValueCountMap.containsKey(attr + ">>" + event.getAttributes().get(attr).toString())) {
+							attrValueCountMap.put(attr + ">>" + event.getAttributes().get(attr).toString(), attrValueCountMap.get(attr + ">>" + event.getAttributes().get(attr).toString()) + 1);	
+						} else {
+							attrValueCountMap.put(attr + ">>" + event.getAttributes().get(attr).toString(), 1);
+						}
 					}
 				}
-
 				//Build a event list to iterate
 				allEventList.add(event);
 			}
@@ -208,8 +217,8 @@ public class EventualFollowModel {
 					} else {
 						absFreq.put(keyString, 1);
 					}
-					
-					
+
+
 					//Insert Dummy start event
 					if(i == 0) {
 						//In case, first event
@@ -217,7 +226,7 @@ public class EventualFollowModel {
 						toString = getEventName(allEventList.get(i));
 						String keyStrForIdx1 = fromString + "->" + toString;
 						relationList.add(keyStrForIdx1);
-						
+
 						//Adding Map to count frequency
 						if(eventualFollowMap.containsKey(keyStrForIdx1)) {
 							eventualFollowMap.put(keyStrForIdx1, eventualFollowMap.get(keyStrForIdx1) + 1);
@@ -260,7 +269,7 @@ public class EventualFollowModel {
 							absFreq.put(keyStrForIdx1, 1);
 						}
 					} 
-					
+
 					//Insert Dummy end event
 					if(j == allEventList.size() - 1) {
 						//In case, last event 
@@ -315,14 +324,14 @@ public class EventualFollowModel {
 				}
 			}
 		}
-		
+
 		absFreq = IFUtil.sortByValue(absFreq);
 
 		//Find IQR Values
 		ArrayList<String> attrList = new ArrayList<String>(numericalListMap.keySet());
 		int numericalAttrCnt = attrList.size();
 		IQR[] iqrData = new IQR[numericalAttrCnt];
-		
+
 		System.out.println("AttrList : " + attrList);
 		for(int k = 0; k < numericalAttrCnt; k++) {
 			System.out.println("Data List : " );
@@ -333,6 +342,14 @@ public class EventualFollowModel {
 			upperIQRBoundMap.put(attrList.get(k), upperValue);
 			lowerIQRBoundMap.put(attrList.get(k), lowerValue);
 		}
+		
+		System.out.println("EFR Calculation has been finished");
+
+		Date endDate = new Date();
+		long endTime =  endDate.getTime();
+		
+		System.out.println("Takes " + (endTime - startTime) / 1000 + "sec");
+		
 	}
 
 
@@ -395,13 +412,14 @@ public class EventualFollowModel {
 		this.attrCountMap = attrCountMap;
 	}
 
-	public ArrayList<Integer> getExceptionList() {
-		return exceptionList;
+	public ArrayList<String> getExceptionStringList() {
+		return exceptionStringList;
 	}
 
-	public void setExceptionList(ArrayList<Integer> exceptionList) {
-		this.exceptionList = exceptionList;
+	public void setExceptionStringList(ArrayList<String> exceptionStringList) {
+		this.exceptionStringList = exceptionStringList;
 	}
+
 	public Map<String, ArrayList<Boolean>> getIsSelectedDataMap() {
 		return isSelectedDataMap;
 	}

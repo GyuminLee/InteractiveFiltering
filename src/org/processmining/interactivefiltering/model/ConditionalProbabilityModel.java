@@ -1,6 +1,7 @@
 package org.processmining.interactivefiltering.model;
 
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -23,13 +24,13 @@ public class ConditionalProbabilityModel {
 
 	//Event
 	Set<String> eventSet;
-	
+
 	//Attribute
 	XAttributeMap attrMap;
 	Set<String> attrSet;
 	Map<String, Integer> attrValueCountMap;
 	Map<String, Integer> attrCountMap;
-	ArrayList<Integer> exceptionList;
+	ArrayList<String> exceptionStringList;
 
 	//Threshold
 	Double thresholdCategorical = 0.25;
@@ -58,15 +59,13 @@ public class ConditionalProbabilityModel {
 	//CPP parameter
 	Map<String, Integer> prefixCnt;
 
-	public ConditionalProbabilityModel(PluginContext context, XLog inputLog, int lengthCondition) {
+	public ConditionalProbabilityModel(PluginContext context, XLog inputLog, int lengthCondition, ArrayList<String> exceptionStringList) {
 		this.context = context;
 		this.inputLog = inputLog;
 		this.colNames = new ArrayList<String>();
 		this.colNames.add("from");
 		this.colNames.add("to");
 		this.colNames.add("conditional probability");
-		
-		System.out.println("Length : " + lengthCondition);
 
 		//isSelected
 		isSelectedDataMap = new HashMap<String, ArrayList<Boolean>>();
@@ -75,7 +74,7 @@ public class ConditionalProbabilityModel {
 		attrValueCountMap = new HashMap<String, Integer>();
 		attrCountMap = new HashMap<String, Integer>();
 		attrSet = new HashSet<String>();
-		exceptionList = new ArrayList<Integer>();
+		this.exceptionStringList = exceptionStringList;
 
 		//Relation
 		relationList = new ArrayList<String>();
@@ -93,7 +92,7 @@ public class ConditionalProbabilityModel {
 		numericalListMap = new HashMap<String, ArrayList<Double>>();
 		upperIQRBoundMap = new HashMap<String, Double>();
 		lowerIQRBoundMap = new HashMap<String, Double>();
-		
+
 		//Time
 
 		//Filtering
@@ -105,6 +104,10 @@ public class ConditionalProbabilityModel {
 		//length of condition
 		prefixCnt = new HashMap<String, Integer>();
 
+		System.out.println("CCP Calculation start");
+		Date startDate = new Date();
+		long startTime =  startDate.getTime();
+		
 		ArrayList<XEvent> allEventList;
 		for(XTrace trace : inputLog) {
 			allEventList = new ArrayList<XEvent>();
@@ -116,50 +119,52 @@ public class ConditionalProbabilityModel {
 				//Collecting attributes
 				attrMap = event.getAttributes();
 				for(String attr : attrMap.keySet()) {
-					attrSet.add(attr);
-					String data = event.getAttributes().get(attr).toString();
+					//if attr is not in the exceptionList
+					if(!exceptionStringList.contains(attr)) {
+						attrSet.add(attr);
+						String data = event.getAttributes().get(attr).toString();
 
-					if(IFUtil.isDoubleString(data)) {
-						data = data.replaceAll(",", ".");
-						if(numericalListMap.containsKey(attr)) {
-							ArrayList<Double> list = numericalListMap.get(attr);
-							list.add(Double.parseDouble(data));
-							numericalListMap.put(attr, list);
-						} else {
-							ArrayList<Double> list = new ArrayList<Double>();
-							list.add(Double.parseDouble(data));
-							numericalListMap.put(attr, list);
-						}
-					}
-
-					if(!(dataTypeMap.containsKey(attr))) {
 						if(IFUtil.isDoubleString(data)) {
-							dataTypeMap.put(attr, "Numerical");
-						} else if(attr.equals("concept:name")
-								||
-								attr.equals("time:timestamp")
-								||
-								attr.equals("lifecycle:transition")
-								) {
-							dataTypeMap.put(attr, "None");
-						} else {
-							dataTypeMap.put(attr, "Categorical");
+							data = data.replaceAll(",", ".");
+							if(numericalListMap.containsKey(attr)) {
+								ArrayList<Double> list = numericalListMap.get(attr);
+								list.add(Double.parseDouble(data));
+								numericalListMap.put(attr, list);
+							} else {
+								ArrayList<Double> list = new ArrayList<Double>();
+								list.add(Double.parseDouble(data));
+								numericalListMap.put(attr, list);
+							}
 						}
-					}
 
-					if(attrCountMap.containsKey(attr)) {
-						attrCountMap.put(attr, attrCountMap.get(attr) + 1);
-					} else {
-						attrCountMap.put(attr, 1);
-					}
+						if(!(dataTypeMap.containsKey(attr))) {
+							if(IFUtil.isDoubleString(data)) {
+								dataTypeMap.put(attr, "Numerical");
+							} else if(attr.equals("concept:name")
+									||
+									attr.equals("time:timestamp")
+									||
+									attr.equals("lifecycle:transition")
+									) {
+								dataTypeMap.put(attr, "None");
+							} else {
+								dataTypeMap.put(attr, "Categorical");
+							}
+						}
 
-					if(attrValueCountMap.containsKey(attr + ">>" + event.getAttributes().get(attr).toString())) {
-						attrValueCountMap.put(attr + ">>" + event.getAttributes().get(attr).toString(), attrValueCountMap.get(attr + ">>" + event.getAttributes().get(attr).toString()) + 1);	
-					} else {
-						attrValueCountMap.put(attr + ">>" + event.getAttributes().get(attr).toString(), 1);
+						if(attrCountMap.containsKey(attr)) {
+							attrCountMap.put(attr, attrCountMap.get(attr) + 1);
+						} else {
+							attrCountMap.put(attr, 1);
+						}
+
+						if(attrValueCountMap.containsKey(attr + ">>" + event.getAttributes().get(attr).toString())) {
+							attrValueCountMap.put(attr + ">>" + event.getAttributes().get(attr).toString(), attrValueCountMap.get(attr + ">>" + event.getAttributes().get(attr).toString()) + 1);	
+						} else {
+							attrValueCountMap.put(attr + ">>" + event.getAttributes().get(attr).toString(), 1);
+						}
 					}
 				}
-
 				//Build a event list to iterate
 				allEventList.add(event);
 			}
@@ -178,17 +183,17 @@ public class ConditionalProbabilityModel {
 						prefixCnt.put(fromString, 1);
 					}
 					toString = trace.get(i + lengthCondition).getAttributes().get("concept:name").toString();
-					
+
 					String keyString = fromString + "->" + toString;
 					relationList.add(keyString);
-					
+
 					//Adding Map to count frequency
 					if(conditionalProbabilityMap.containsKey(keyString)) {
 						conditionalProbabilityMap.put(keyString, conditionalProbabilityMap.get(keyString) + 1);
 					} else {
 						conditionalProbabilityMap.put(keyString, 1);
 					}
-					
+
 					//Adding XEvent data to eventDatamap and isSelected Data as well
 					if(eventDataMap.containsKey(keyString)) { //Update 
 						//XEvent information
@@ -210,7 +215,7 @@ public class ConditionalProbabilityModel {
 						isSelectedList.add(false);
 						isSelectedDataMap.put(keyString, isSelectedList);
 					}
-					
+
 					//Adding absFreq
 					if(absFreq.containsKey(keyString)) {
 						absFreq.put(keyString, absFreq.get(keyString) + 1);
@@ -220,7 +225,7 @@ public class ConditionalProbabilityModel {
 				}
 			}
 		}
-		
+
 		absFreq = IFUtil.sortByValue(absFreq);
 
 		//Calculating conditional Probability
@@ -231,17 +236,15 @@ public class ConditionalProbabilityModel {
 			double conditionalProb = (cppFreq * 1.0) / prefixFreq;
 			probabilityMap.put(keyString, conditionalProb);
 		}
-		
+
 		probabilityMap = IFUtil.sortByDoubleValue(probabilityMap);
 
 		//Find IQR Values
 		ArrayList<String> attrList = new ArrayList<String>(numericalListMap.keySet());
 		int numericalAttrCnt = attrList.size();
 		IQR[] iqrData = new IQR[numericalAttrCnt];
-		
-		System.out.println("AttrList : " + attrList);
+
 		for(int k = 0; k < numericalAttrCnt; k++) {
-			System.out.println("Data List : " );
 			iqrData[k] = new IQR(numericalListMap.get(attrList.get(k)));
 			iqrData[k].pullstats();
 			Double upperValue = iqrData[k].getUq();
@@ -249,6 +252,14 @@ public class ConditionalProbabilityModel {
 			upperIQRBoundMap.put(attrList.get(k), upperValue);
 			lowerIQRBoundMap.put(attrList.get(k), lowerValue);
 		}
+		
+		System.out.println("CCP Calculation has been finished");
+
+		Date endDate = new Date();
+		long endTime =  endDate.getTime();
+		
+		System.out.println("Takes " + (endTime - startTime) / 1000 + "sec");
+		
 	}
 
 
@@ -305,12 +316,13 @@ public class ConditionalProbabilityModel {
 		this.attrCountMap = attrCountMap;
 	}
 
-	public ArrayList<Integer> getExceptionList() {
-		return exceptionList;
+
+	public ArrayList<String> getExceptionStringList() {
+		return exceptionStringList;
 	}
 
-	public void setExceptionList(ArrayList<Integer> exceptionList) {
-		this.exceptionList = exceptionList;
+	public void setExceptionStringList(ArrayList<String> exceptionStringList) {
+		this.exceptionStringList = exceptionStringList;
 	}
 
 	public Double getThresholdCategorical() {
@@ -375,7 +387,7 @@ public class ConditionalProbabilityModel {
 	public void setProbabilityMap(Map<String, Double> probabilityMap) {
 		this.probabilityMap = probabilityMap;
 	}
-	
+
 	public static List<Double> getOutliers(List<Double> input) {
 		List<Double> output = new ArrayList<Double>();
 		List<Double> data1 = new ArrayList<Double>();

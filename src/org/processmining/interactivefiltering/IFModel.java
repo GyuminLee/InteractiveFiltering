@@ -1,6 +1,12 @@
 package org.processmining.interactivefiltering;
 
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.Set;
+
+import org.deckfour.xes.model.XEvent;
 import org.deckfour.xes.model.XLog;
+import org.deckfour.xes.model.XTrace;
 import org.processmining.framework.plugin.PluginContext;
 import org.processmining.interactivefiltering.model.ConditionalProbabilityModel;
 import org.processmining.interactivefiltering.model.DirectFollowModel;
@@ -15,6 +21,8 @@ public class IFModel {
 	int prevPattern = 0;
 	int lengthCondition = 2;
 	
+	Set<String> originalAttrSet;
+	
 	DirectFollowModel dfrModel;
 	ConditionalProbabilityModel cppModel;
 	EventualFollowModel efrModel;
@@ -23,13 +31,22 @@ public class IFModel {
 		this.context = context;
 		this.inputLog = inputLog;
 		this.selectedPattern = selectedPattern;
-//		selectedPattern = IFConstant.DFR_INT;
+		this.originalAttrSet = new HashSet<String>();
+		for(XTrace trace : inputLog) {
+			for(XEvent event : trace) {
+				for(String attr : event.getAttributes().keySet()) {
+					originalAttrSet.add(attr);
+				}
+			}
+		}
+		
+		ArrayList<String> exceptionList = new ArrayList<>();
 		if(selectedPattern == IFConstant.CPP_INT) {
-			cppModel = new ConditionalProbabilityModel(context, inputLog, lengthCondition);
+			cppModel = new ConditionalProbabilityModel(context, inputLog, lengthCondition, exceptionList);
 		} else if (selectedPattern == IFConstant.EFR_INT) {
-			efrModel = new EventualFollowModel(context, inputLog);
+			efrModel = new EventualFollowModel(context, inputLog, exceptionList);
 		} else {
-			dfrModel = new DirectFollowModel(context, inputLog);
+			dfrModel = new DirectFollowModel(context, inputLog, exceptionList);
 		}
 	}
 	public int getLengthCondition() {
@@ -77,6 +94,12 @@ public class IFModel {
 
 
 
+	public Set<String> getOriginalAttrSet() {
+		return originalAttrSet;
+	}
+	public void setOriginalAttrSet(Set<String> originalAttrSet) {
+		this.originalAttrSet = originalAttrSet;
+	}
 	public void setDfrModel(DirectFollowModel dfrModel) {
 		this.dfrModel = dfrModel;
 	}

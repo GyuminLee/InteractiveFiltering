@@ -93,7 +93,7 @@ class MainView extends JPanel {
 		this.add(leftPanel, new Float(70));
 		this.add(rightPanel, new Float(30));
 		leftPanel.listPanel.createListTable(IFConstant.DFR_INT);
-		leftPanel.infoPanel.createInfoTable(0, model.getDfrModel().getExceptionList());//Initially showing the first row information.
+		leftPanel.infoPanel.createInfoTable(0);//Initially showing the first row information.
 		
 	}
 }
@@ -174,7 +174,7 @@ class RightPanel extends JPanel {
 			attrDataTypePanel.setLayout(new BoxLayout(attrDataTypePanel, BoxLayout.X_AXIS));
 			attrCheckBox[i] = new JCheckBox(list.get(i));
 			attrCheckBox[i].setSelected(true);
-			attrCheckBox[i].setEnabled(false);
+//			attrCheckBox[i].setEnabled(false);
 //			attrCheckBox[i].addActionListener(attrChangeListener);
 			attrDataTypePanel.add(attrCheckBox[i]);
 			dataTypeSelection[i] = new JComboBox<String>();
@@ -316,6 +316,7 @@ class ListPanel extends JPanel {
 		IFListTableModel tableModel;
 
 		model.setSelectedPattern(selectedPattern);
+		/*
 		if(selectedPattern == IFConstant.CPP_INT) {
 			model.setCppModel(new ConditionalProbabilityModel(context, model.getInputLog(), model.getLengthCondition()));
 		} else if (selectedPattern == IFConstant.EFR_INT) {
@@ -323,7 +324,7 @@ class ListPanel extends JPanel {
 		} else {
 			model.setDfrModel(new DirectFollowModel(context, model.getInputLog()));
 		}
-		
+		*/
 		tableModel = new IFListTableModel(context, model);		
 		JTable jTable = new JTable(tableModel);
 		table = jTable;
@@ -335,11 +336,11 @@ class ListPanel extends JPanel {
 				int selectedPattern = model.getSelectedPattern();
 				
 				if(selectedPattern == IFConstant.CPP_INT) {
-					infoPanel.createInfoTable(row, model.getCppModel().getExceptionList());
+					infoPanel.createInfoTable(row);
 				} else if (selectedPattern == IFConstant.EFR_INT) {
-					infoPanel.createInfoTable(row, model.getEfrModel().getExceptionList());
+					infoPanel.createInfoTable(row);
 				} else {
-					infoPanel.createInfoTable(row, model.getDfrModel().getExceptionList());				
+					infoPanel.createInfoTable(row);				
 				}
 				
 			}
@@ -351,15 +352,15 @@ class ListPanel extends JPanel {
 				int selectedPattern = model.getSelectedPattern();
 				
 				if(selectedPattern == IFConstant.CPP_INT) {
-					infoPanel.createInfoTable(row, model.getCppModel().getExceptionList());
+					infoPanel.createInfoTable(row);
 					String keyStr = (String) model.getCppModel().getAbsFreq().keySet().toArray()[row];
 					System.out.println("Key String in ListTable : " + keyStr);
 				} else if (selectedPattern == IFConstant.EFR_INT) {
-					infoPanel.createInfoTable(row, model.getEfrModel().getExceptionList());
+					infoPanel.createInfoTable(row);
 					String keyStr = (String) model.getEfrModel().getAbsFreq().keySet().toArray()[row];
 					System.out.println("Key String in ListTable : " + keyStr);
 				} else {
-					infoPanel.createInfoTable(row, model.getDfrModel().getExceptionList());
+					infoPanel.createInfoTable(row);
 					String keyStr = (String) model.getDfrModel().getAbsFreq().keySet().toArray()[row];
 					System.out.println("Key String in ListTable : " + keyStr);
 				}
@@ -397,7 +398,7 @@ class InfoPanel extends JPanel {
 		this.setLayout(rl);
 	}
 
-	public void createInfoTable(final int selectedRow, ArrayList<Integer> exceptionList) {
+	public void createInfoTable(final int selectedRow) {
 		this.removeAll();
 		this.updateUI();
 		IFInfoTableModel tableModel;
@@ -406,15 +407,15 @@ class InfoPanel extends JPanel {
 		table = jTable;
 		
 		int selectedPattern = model.getSelectedPattern();
-		if(selectedPattern == IFConstant.CPP_INT) {
-			exceptionList = model.getCppModel().getExceptionList();
-		} else if(selectedPattern == IFConstant.EFR_INT) {
-			exceptionList = model.getEfrModel().getExceptionList();
-		} else { //DFR_INT
-			exceptionList = model.getDfrModel().getExceptionList();
-		}
+//		if(selectedPattern == IFConstant.CPP_INT) {
+//			exceptionList = model.getCppModel().getExceptionList();
+//		} else if(selectedPattern == IFConstant.EFR_INT) {
+//			exceptionList = model.getEfrModel().getExceptionList();
+//		} else { //DFR_INT
+//			exceptionList = model.getDfrModel().getExceptionList();
+//		}
 
-		Collections.sort(exceptionList, Collections.reverseOrder());
+//		Collections.sort(exceptionList, Collections.reverseOrder());
 
 		jTable.setDefaultRenderer(Object.class, new InfoTableCellRenderer());
 		
@@ -624,7 +625,7 @@ class SelectionCheckBoxChangeListener implements ActionListener{
 			tableModel.selectAll();
 		}
 		ArrayList<Integer> exceptionList = new ArrayList<>();
-		leftPanel.infoPanel.createInfoTable(tableModel.getFocusedIndex(), exceptionList);
+		leftPanel.infoPanel.createInfoTable(tableModel.getFocusedIndex());
 		
 	}
 
@@ -662,22 +663,38 @@ class RefreshButtonListener implements ActionListener {
 				exceptionList.add(i);
 			}
 		}
+		Collections.sort(exceptionList, Collections.reverseOrder());
+
+		System.out.println("ExceptionList : " + exceptionList);
+		
+		//if Attributes exception list contains 
+		//Remove attributes in the model (in the attributes map)
+		ArrayList<String> originalAttrList = new ArrayList<String>(model.getOriginalAttrSet());
+		ArrayList<String> exceptionStringList = new ArrayList<String>();
+		
+		for(int idx : exceptionList) {
+			String attrString = originalAttrList.get(idx);
+			exceptionStringList.add(attrString);
+		}
 		
 		int selectedPattern = IFConstant.DFR_INT;
 		if(patternSelection.getSelectedItem().equals(IFConstant.CPP_STRING)) {
 			selectedPattern = IFConstant.CPP_INT;
-			model.setCppModel(new ConditionalProbabilityModel(context, model.getInputLog(), model.getLengthCondition()));
+			model.setCppModel(new ConditionalProbabilityModel(context, model.getInputLog(), model.getLengthCondition(), exceptionStringList));
+		
 		} else if(patternSelection.getSelectedItem().equals(IFConstant.EFR_STRING)) {
 			selectedPattern = IFConstant.EFR_INT;
-			model.setEfrModel(new EventualFollowModel(context, model.getInputLog()));
-		} else {
+			model.setEfrModel(new EventualFollowModel(context, model.getInputLog(), exceptionStringList));
+		} else { // DFR 
 			selectedPattern = IFConstant.DFR_INT;
+			model.setDfrModel(new DirectFollowModel(context, model.getInputLog(), exceptionStringList));
 		}
 		model.setSelectedPattern(selectedPattern);
 		
+		
+		
 		if(selectedPattern == IFConstant.CPP_INT) {
-			model.getCppModel().setExceptionList(exceptionList);
-			ArrayList<String> attrList = new ArrayList<String>(model.getCppModel().getAttrSet());
+			ArrayList<String> attrList = new ArrayList<String>(model.getOriginalAttrSet());
 			Map<String, String> dataTypeMap = new HashMap<String, String>();
 			
 			//Change Data Type (Categorical / Numerical)
@@ -702,8 +719,7 @@ class RefreshButtonListener implements ActionListener {
 			conditionLengthSelection.setVisible(true);
 			
 		} else if(selectedPattern == IFConstant.EFR_INT) {
-			model.getEfrModel().setExceptionList(exceptionList);
-			ArrayList<String> attrList = new ArrayList<String>(model.getEfrModel().getAttrSet());
+			ArrayList<String> attrList = new ArrayList<String>(model.getOriginalAttrSet());
 			Map<String, String> dataTypeMap = new HashMap<String, String>();
 			
 			//Change Data Type (Categorical / Numerical)
@@ -723,8 +739,7 @@ class RefreshButtonListener implements ActionListener {
 			conditionLengthLabel.setVisible(false);
 			conditionLengthSelection.setVisible(false);
 		} else { //DFR_INT
-			model.getDfrModel().setExceptionList(exceptionList);
-			ArrayList<String> attrList = new ArrayList<String>(model.getDfrModel().getAttrSet());
+			ArrayList<String> attrList = new ArrayList<String>(model.getOriginalAttrSet());
 			Map<String, String> dataTypeMap = new HashMap<String, String>();
 			
 			//Change Data Type (Categorical / Numerical)
@@ -753,9 +768,9 @@ class RefreshButtonListener implements ActionListener {
 		
 		//If changed pattern, showing index0 information
 		if(model.getPrevPattern() == selectedPattern) {
-			leftPanel.infoPanel.createInfoTable(tableModel.getFocusedIndex(), exceptionList);
+			leftPanel.infoPanel.createInfoTable(tableModel.getFocusedIndex());
 		} else {
-			leftPanel.infoPanel.createInfoTable(0, exceptionList);
+			leftPanel.infoPanel.createInfoTable(0);
 		}
 		model.setPrevPattern(selectedPattern);
 		
@@ -890,6 +905,7 @@ class ExportButtonListener implements ActionListener {
 		System.out.println("Noise Count : " + noiseCnt);
 		System.out.println("====================================");
 		System.out.println("Log is exported!");
+		
 		context.getProvidedObjectManager().createProvidedObject("Filtered Log", outputLog, XLog.class, context);
 		if (context instanceof UIPluginContext) {
 			((UIPluginContext) context).getGlobalContext().getResourceManager().getResourceForInstance(outputLog)
