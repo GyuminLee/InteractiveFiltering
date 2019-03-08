@@ -9,7 +9,7 @@ import org.processmining.framework.plugin.annotations.PluginVariant;
 import org.processmining.interactivefiltering.IFConstant;
 import org.processmining.interactivefiltering.IFModel;
 
-@Plugin(name = "Interactive Filtering (Direct Follow Relation Only)",
+@Plugin(name = "Interactive Filtering",
 parameterLabels = {"Log"} ,
 returnLabels = {"Interactive Filtering Model"},
 returnTypes = {IFModel.class})

@@ -18,10 +18,14 @@ import javax.swing.BoxLayout;
 import javax.swing.JButton;
 import javax.swing.JCheckBox;
 import javax.swing.JComboBox;
+import javax.swing.JFrame;
 import javax.swing.JLabel;
+import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JTable;
+import javax.swing.event.ChangeEvent;
+import javax.swing.event.ChangeListener;
 
 import org.deckfour.xes.id.XID;
 import org.deckfour.xes.model.XEvent;
@@ -122,7 +126,7 @@ class RightPanel extends JPanel {
 	
 	//Slider
 	NiceIntegerSlider thresholdCategoricalSlider;
-	
+	ThresholdCategoricalListener thresholdCategoricalListener;
 	
 	// Button (Export, refresh)
 	JButton exportButton;
@@ -130,7 +134,7 @@ class RightPanel extends JPanel {
 	JButton refreshButton;
 	RefreshButtonListener refreshListener;
 	JButton addLabelButton;
-//	AddLabelButtonListener addLabelListener;
+	AddLabelButtonListener addLabelListener;
 	
 	
 	public RightPanel(PluginContext context, IFModel model, LeftPanel leftPanel) {
@@ -196,7 +200,8 @@ class RightPanel extends JPanel {
 		scrollPanel.setViewportView(attrPanel);
 		
 		this.thresholdCategoricalSlider = SlickerFactory.instance().createNiceIntegerSlider("Set Categorical Threshold", 0, 100, 25, Orientation.HORIZONTAL);
-	
+		thresholdCategoricalListener = new ThresholdCategoricalListener(context, model, thresholdCategoricalSlider, leftPanel);
+		this.thresholdCategoricalSlider.addChangeListener(thresholdCategoricalListener);
 //		this.addLabelButton = new JButton("Add Label");
 //		addLabelListener = new AddLabelButtonListener(context, model);
 //		this.addLabelButton.addActionListener(addLabelListener);
@@ -222,18 +227,21 @@ class RightPanel extends JPanel {
 		
 		this.add(conditionLengthLabel);
 		this.add(conditionLengthSelection);
+
+		JLabel refreshLabel = new JLabel("Changed the setting");
+		this.add(refreshLabel);
+		this.add(refreshButton);
+
 		
 		JLabel thresholdLabel = new JLabel("Thresholds");
 		this.add(thresholdLabel);
 		this.add(thresholdCategoricalSlider);
 		
 		//Button (Export, Refresh)
-		JLabel buttonLabel = new JLabel("Buttons");
+		JLabel buttonLabel = new JLabel("Export filtered log");
 		this.add(buttonLabel);
+//		this.add(addLabelButton);
 		this.add(exportButton);
-		this.add(refreshButton);
-		
-		
 		
 	}
 }
@@ -656,6 +664,7 @@ class RefreshButtonListener implements ActionListener {
 	}
 
 	public void actionPerformed(ActionEvent e) {
+		
 		//Change Attributes
 		ArrayList<Integer> exceptionList = new ArrayList<>();
 		for(int i = 0; i < attrCheckBoxList.length; i++) {
@@ -774,10 +783,50 @@ class RefreshButtonListener implements ActionListener {
 		}
 		model.setPrevPattern(selectedPattern);
 		
+		JOptionPane.showMessageDialog(new JFrame(), "Refresh Done", "Done", JOptionPane.CLOSED_OPTION);
 	}
 }
 
-/*
+
+class ThresholdCategoricalListener implements ChangeListener {
+	PluginContext context;
+	IFModel model;
+	XLog log;
+	NiceIntegerSlider sliderCategorical;
+	LeftPanel leftPanel;
+
+	public ThresholdCategoricalListener(PluginContext context, IFModel model, NiceIntegerSlider sliderCategorical, LeftPanel leftPanel) {
+		this.context = context;
+		this.model = model;
+		this.leftPanel = leftPanel;
+		this.sliderCategorical = sliderCategorical;	
+	}
+	
+	public void stateChanged(ChangeEvent e) {
+		double threshold = ( sliderCategorical.getValue() * 1.0 ) / 100;
+		
+		int selectedPattern = model.getSelectedPattern();
+		if(selectedPattern == IFConstant.CPP_INT) {
+			model.getCppModel().setThresholdCategorical(threshold);
+		} else if(selectedPattern == IFConstant.EFR_INT) {
+			model.getEfrModel().setThresholdCategorical(threshold);
+		} else {
+			model.getDfrModel().setThresholdCategorical(threshold);	
+		}
+		
+		System.out.println("Threshold Changed : " + threshold);
+		
+		IFInfoTableModel tableModel = (IFInfoTableModel) leftPanel.infoPanel.table.getModel();
+
+		leftPanel.infoPanel.createInfoTable(tableModel.getFocusedIndex());
+
+	}
+
+	
+}
+
+
+//Adding Labeling for finding noise
 class AddLabelButtonListener implements ActionListener {
 	PluginContext context;
 	IFModel model;
@@ -832,7 +881,7 @@ class AddLabelButtonListener implements ActionListener {
 	
 	}
 }
-*/
+
 
 class ExportButtonListener implements ActionListener {
 	PluginContext context;
