@@ -49,6 +49,7 @@ import org.processmining.interactivefiltering.table.InfoTableCellRenderer;
 
 import com.fluxicon.slickerbox.components.NiceIntegerSlider;
 import com.fluxicon.slickerbox.components.NiceSlider.Orientation;
+import com.fluxicon.slickerbox.components.SlickerProgressBar;
 import com.fluxicon.slickerbox.factory.SlickerFactory;
 
 @Plugin(name = "Visualize IF",
@@ -651,6 +652,8 @@ class RefreshButtonListener implements ActionListener {
 	
 	LeftPanel leftPanel;
 	
+	SlickerProgressBar progress;
+	
 	public RefreshButtonListener(PluginContext context, IFModel model, JCheckBox[] attrCheckBoxList, JComboBox<String>[] dataTypeSelectionList, NiceIntegerSlider sliderCategorical, JComboBox<Integer> conditionLengthSelection, JComboBox<String> patternSelection, JLabel conditionLengthLabel, LeftPanel leftPanel) {
 		this.context = context;
 		this.model = model;
@@ -664,6 +667,9 @@ class RefreshButtonListener implements ActionListener {
 	}
 
 	public void actionPerformed(ActionEvent e) {
+		progress = new SlickerProgressBar();
+		progress.setVisible(true);
+		progress.setIndeterminate(true);
 		
 		//Change Attributes
 		ArrayList<Integer> exceptionList = new ArrayList<>();
@@ -782,8 +788,8 @@ class RefreshButtonListener implements ActionListener {
 			leftPanel.infoPanel.createInfoTable(0);
 		}
 		model.setPrevPattern(selectedPattern);
-		
-		JOptionPane.showMessageDialog(new JFrame(), "Refresh Done", "Done", JOptionPane.CLOSED_OPTION);
+
+		JOptionPane.showMessageDialog(new JFrame(), "Refresh is done", "Done", JOptionPane.CLOSED_OPTION);
 	}
 }
 
