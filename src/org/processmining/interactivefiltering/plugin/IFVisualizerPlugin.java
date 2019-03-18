@@ -116,8 +116,6 @@ class RightPanel extends JPanel {
 	// Attributes Setting
 	JCheckBox[] attrCheckBox;
 	
-//	AttributeChangeListener attrChangeListener;
-	
 	JComboBox<String>[] dataTypeSelection;
 	JComboBox<String> patternSelection;
 	JLabel conditionLengthLabel;
@@ -130,7 +128,9 @@ class RightPanel extends JPanel {
 	ThresholdCategoricalListener thresholdCategoricalListener;
 	
 	// Button (Export, refresh)
-	JButton exportButton;
+	JButton exportNoiseLogButton;
+	ExportNoiseButtonListener exportNoiseListener;
+	JButton exportFilteredLogButton;
 	ExportButtonListener exportListener;
 	JButton refreshButton;
 	RefreshButtonListener refreshListener;
@@ -167,7 +167,6 @@ class RightPanel extends JPanel {
 		ArrayList<String> list = new ArrayList<String>(model.getDfrModel().getAttrSet()); 
 		attrCheckBox = new JCheckBox[list.size()];
 		dataTypeSelection = new JComboBox[list.size()];
-//		attrChangeListener = new AttributeChangeListener(context, model);
 		JPanel attrPanel = new JPanel();
 		attrPanel.setLayout(new BoxLayout(attrPanel, BoxLayout.Y_AXIS));
 	
@@ -179,8 +178,6 @@ class RightPanel extends JPanel {
 			attrDataTypePanel.setLayout(new BoxLayout(attrDataTypePanel, BoxLayout.X_AXIS));
 			attrCheckBox[i] = new JCheckBox(list.get(i));
 			attrCheckBox[i].setSelected(true);
-//			attrCheckBox[i].setEnabled(false);
-//			attrCheckBox[i].addActionListener(attrChangeListener);
 			attrDataTypePanel.add(attrCheckBox[i]);
 			dataTypeSelection[i] = new JComboBox<String>();
 			dataTypeSelection[i].addItem("Categorical");
@@ -203,12 +200,15 @@ class RightPanel extends JPanel {
 		this.thresholdCategoricalSlider = SlickerFactory.instance().createNiceIntegerSlider("Set Categorical Threshold", 0, 100, 25, Orientation.HORIZONTAL);
 		thresholdCategoricalListener = new ThresholdCategoricalListener(context, model, thresholdCategoricalSlider, leftPanel);
 		this.thresholdCategoricalSlider.addChangeListener(thresholdCategoricalListener);
-//		this.addLabelButton = new JButton("Add Label");
-//		addLabelListener = new AddLabelButtonListener(context, model);
-//		this.addLabelButton.addActionListener(addLabelListener);
-		this.exportButton = new JButton("Export");
+		this.addLabelButton = new JButton("Add Label");
+		addLabelListener = new AddLabelButtonListener(context, model);
+		this.addLabelButton.addActionListener(addLabelListener);
+		this.exportNoiseLogButton = new JButton("Export the noise Log");
+		exportNoiseListener = new ExportNoiseButtonListener(context, model);
+		this.exportNoiseLogButton.addActionListener(exportNoiseListener);
+		this.exportFilteredLogButton = new JButton("Export the flitered Log");
 		exportListener = new ExportButtonListener(context, model);
-		this.exportButton.addActionListener(exportListener);
+		this.exportFilteredLogButton.addActionListener(exportListener);
 		this.refreshButton = new JButton("Refresh");
 		refreshListener = new RefreshButtonListener(context, model, attrCheckBox, dataTypeSelection, thresholdCategoricalSlider, conditionLengthSelection,  patternSelection, conditionLengthLabel, leftPanel);
 		this.refreshButton.addActionListener(refreshListener);
@@ -239,10 +239,11 @@ class RightPanel extends JPanel {
 		this.add(thresholdCategoricalSlider);
 		
 		//Button (Export, Refresh)
-		JLabel buttonLabel = new JLabel("Export filtered log");
+		JLabel buttonLabel = new JLabel("Export log");
 		this.add(buttonLabel);
-//		this.add(addLabelButton);
-		this.add(exportButton);
+		this.add(addLabelButton);
+		this.add(exportFilteredLogButton);
+		this.add(exportNoiseLogButton);
 		
 	}
 }
@@ -414,20 +415,8 @@ class InfoPanel extends JPanel {
 		tableModel = new IFInfoTableModel(context, model, selectedRow);
 		JTable jTable = new JTable(tableModel);
 		table = jTable;
-		
-		int selectedPattern = model.getSelectedPattern();
-//		if(selectedPattern == IFConstant.CPP_INT) {
-//			exceptionList = model.getCppModel().getExceptionList();
-//		} else if(selectedPattern == IFConstant.EFR_INT) {
-//			exceptionList = model.getEfrModel().getExceptionList();
-//		} else { //DFR_INT
-//			exceptionList = model.getDfrModel().getExceptionList();
-//		}
-
-//		Collections.sort(exceptionList, Collections.reverseOrder());
 
 		jTable.setDefaultRenderer(Object.class, new InfoTableCellRenderer());
-		
 		
 		jTable.addMouseListener(new MouseListener() {
 			public void mouseReleased(MouseEvent e) {
@@ -571,8 +560,6 @@ class PatternSelectionListener implements ActionListener {
 			System.out.println("EFR Selected");
 		}
 		System.out.println("Param : " + selectedItem + " / " + selectedPattern);
-//		leftPanel.listPanel.createListTable(selectedPattern);		
-		
 	}
 }
 
@@ -590,23 +577,10 @@ class DataTypeSelectionListener implements ActionListener {
 		this.index = index;
 	}
 
-
 	public void actionPerformed(ActionEvent e) {
 		String selectedItem = dataTypeSelection[index].getSelectedItem().toString();
-		// TODO Auto-generated method stub
-//		if(selectedItem.equals(IFConstant.CPP_STRING)) {
-//			model.setSelectedPattern(IFConstant.CPP_INT);	
-//		} else if (selectedItem.equals(IFConstant.EFR_STRING)) {
-//			model.setSelectedPattern(IFConstant.EFR_INT);
-//		} else {
-//			model.setSelectedPattern(IFConstant.DFR_INT);
-//		}
-//		
 		System.out.println("Selected Item : " + selectedItem);
-
 	}
-
-
 }
 
 class SelectionCheckBoxChangeListener implements ActionListener{
@@ -844,26 +818,34 @@ class AddLabelButtonListener implements ActionListener {
 		this.log = model.getInputLog();
 	}
 	public void actionPerformed(ActionEvent e) {
-		// TODO Auto-generated method stub
-		ArrayList<XID> filteringList = model.getDfrModel().getFilteringList();
+		int selectedPattern = model.getSelectedPattern();
+		ArrayList<XID> filteringList;
+		
+		if(selectedPattern == IFConstant.CPP_INT) {
+			filteringList = model.getCppModel().getFilteringList();
+		} else if(selectedPattern == IFConstant.EFR_INT) {
+			filteringList = model.getEfrModel().getFilteringList();
+		} else {// DFR
+			filteringList = model.getDfrModel().getFilteringList();
+		}
 		doLabeling(filteringList, model);
+		JOptionPane.showMessageDialog(new JFrame(), "Labeling is done", "Done", JOptionPane.CLOSED_OPTION);
 	}
 	
 	public void doLabeling(ArrayList<XID> filteringList, IFModel model) {
+		
+		
 		Set<Integer> removeSet = new HashSet<Integer>();
 		
 		XAttributeLiteralImpl waitingAttrClean = new XAttributeLiteralImpl("isNoise", "False");
 		XAttributeLiteralImpl waitingAttrDirty = new XAttributeLiteralImpl("isNoise", "True");
-		
-		for(XTrace trace : log) {
+		XLog outputLog = (XLog)log.clone();
+
+		for(XTrace trace : outputLog) {
 			String eventList = "";
 			boolean isNoise = false;
 			for(XEvent event : trace) {
 				eventList += event.getAttributes().get("concept:name").toString() + ">>";
-				if(filteringList.contains(event.getID())) {
-					removeSet.add(log.indexOf(trace));
-					System.out.println("Trace - Noise: " + log.indexOf(trace));
-				}
 			}
 			String[] eventArray = eventList.split(">>");
 			for(int i = 0; i < eventArray.length - 1; i++) {
@@ -884,10 +866,69 @@ class AddLabelButtonListener implements ActionListener {
 				trace.getAttributes().put("isNoise", waitingAttrClean);
 			}
 		}
-	
+		
+
+		context.getProvidedObjectManager().createProvidedObject("Labeled Log", outputLog, XLog.class, context);
+		if (context instanceof UIPluginContext) {
+			((UIPluginContext) context).getGlobalContext().getResourceManager().getResourceForInstance(outputLog)
+			.setFavorite(true);
+		}
 	}
+	
 }
 
+class ExportNoiseButtonListener implements ActionListener {
+	PluginContext context;
+	IFModel model;
+	XLog log;
+	
+	public ExportNoiseButtonListener(PluginContext context, IFModel model) {
+		this.context = context;
+		this.model = model;
+		this.log = model.getInputLog();
+	}
+	
+	public void actionPerformed(ActionEvent e) {
+		int selectedPattern = model.getSelectedPattern();
+		ArrayList<XID> filteringList;
+		
+		if(selectedPattern == IFConstant.CPP_INT) {
+			filteringList = model.getCppModel().getFilteringList();
+		} else if(selectedPattern == IFConstant.EFR_INT) {
+			filteringList = model.getEfrModel().getFilteringList();
+		} else {// DFR
+			filteringList = model.getDfrModel().getFilteringList();
+		}
+		doFiltering(filteringList, model);
+		JOptionPane.showMessageDialog(new JFrame(), "Extraction is done", "Done", JOptionPane.CLOSED_OPTION);
+
+	}
+	
+	public void doFiltering(ArrayList<XID> filteringList, IFModel model) {
+
+		XLog outputLog = (XLog)log.clone();
+		outputLog.removeAll(outputLog);
+		for(XTrace trace : log) {
+			for(XEvent event : trace) {
+				if(filteringList.contains(event.getID())) {
+					outputLog.add(trace);
+					System.out.println("Trace - Noise: " + log.indexOf(trace));
+
+				}
+			}
+		}
+		
+		System.out.println("====================================");
+		System.out.println("Noise Log is exported!");
+		System.out.println("====================================");
+		
+		context.getProvidedObjectManager().createProvidedObject("Noise Log", outputLog, XLog.class, context);
+		if (context instanceof UIPluginContext) {
+			((UIPluginContext) context).getGlobalContext().getResourceManager().getResourceForInstance(outputLog)
+			.setFavorite(true);
+		}
+	}
+}
 
 class ExportButtonListener implements ActionListener {
 	PluginContext context;
@@ -900,13 +941,23 @@ class ExportButtonListener implements ActionListener {
 		this.log = model.getInputLog();
 	}
 	public void actionPerformed(ActionEvent e) {
-		ArrayList<XID> filteringList = model.getDfrModel().getFilteringList();
+		int selectedPattern = model.getSelectedPattern();
+
+		ArrayList<XID> filteringList;
+		
+		if(selectedPattern == IFConstant.CPP_INT) {
+			filteringList = model.getCppModel().getFilteringList();
+		} else if(selectedPattern == IFConstant.EFR_INT) {
+			filteringList = model.getEfrModel().getFilteringList();
+		} else {// DFR
+			filteringList = model.getDfrModel().getFilteringList();
+		}
 		doFiltering(filteringList, model);
+		JOptionPane.showMessageDialog(new JFrame(), "Extraction is done", "Done", JOptionPane.CLOSED_OPTION);
+
 	}
 	
 	public void doFiltering(ArrayList<XID> filteringList, IFModel model) {
-//		XLog outputLog = (XLog)log.clone();
-//		XLog outputLog = log;
 		Set<Integer> removeSet = new HashSet<Integer>();
 		int noiseCnt = 0;
 		int removeCnt = 0;
