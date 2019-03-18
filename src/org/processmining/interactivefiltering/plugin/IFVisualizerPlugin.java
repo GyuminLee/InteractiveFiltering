@@ -200,7 +200,7 @@ class RightPanel extends JPanel {
 		this.thresholdCategoricalSlider = SlickerFactory.instance().createNiceIntegerSlider("Set Categorical Threshold", 0, 100, 25, Orientation.HORIZONTAL);
 		thresholdCategoricalListener = new ThresholdCategoricalListener(context, model, thresholdCategoricalSlider, leftPanel);
 		this.thresholdCategoricalSlider.addChangeListener(thresholdCategoricalListener);
-		this.addLabelButton = new JButton("Add Label");
+		this.addLabelButton = new JButton("Add the Noise Label");
 		addLabelListener = new AddLabelButtonListener(context, model);
 		this.addLabelButton.addActionListener(addLabelListener);
 		this.exportNoiseLogButton = new JButton("Export the noise Log");
@@ -209,7 +209,7 @@ class RightPanel extends JPanel {
 		this.exportFilteredLogButton = new JButton("Export the flitered Log");
 		exportListener = new ExportButtonListener(context, model);
 		this.exportFilteredLogButton.addActionListener(exportListener);
-		this.refreshButton = new JButton("Refresh");
+		this.refreshButton = new JButton("Change the Attribute Setting");
 		refreshListener = new RefreshButtonListener(context, model, attrCheckBox, dataTypeSelection, thresholdCategoricalSlider, conditionLengthSelection,  patternSelection, conditionLengthLabel, leftPanel);
 		this.refreshButton.addActionListener(refreshListener);
 		
@@ -833,9 +833,6 @@ class AddLabelButtonListener implements ActionListener {
 	}
 	
 	public void doLabeling(ArrayList<XID> filteringList, IFModel model) {
-		
-		
-		Set<Integer> removeSet = new HashSet<Integer>();
 		
 		XAttributeLiteralImpl waitingAttrClean = new XAttributeLiteralImpl("isNoise", "False");
 		XAttributeLiteralImpl waitingAttrDirty = new XAttributeLiteralImpl("isNoise", "True");
